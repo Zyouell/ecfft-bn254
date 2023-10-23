@@ -1,8 +1,11 @@
 use ark_ff::PrimeField;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, CanonicalDeserialize, CanonicalSerialize, PartialEq, Eq, Hash, Debug)]
 /// 2x2 matrix.
-pub struct Matrix<T>(pub [[T; 2]; 2]);
+pub struct Matrix<T>(pub [[T; 2]; 2])
+where
+    T: Sized + Send + Sync + Copy + CanonicalDeserialize + CanonicalSerialize;
 
 impl<F: PrimeField> Matrix<F> {
     /// Inverse of the matrix. Panics if the matrix is not invertible.

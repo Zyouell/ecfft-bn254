@@ -7,6 +7,7 @@ pub type F = ark_bn254::Fr;
 /// Number of 64-bit limbs needed to represent field elements.
 const NUM_LIMBS: usize = 4;
 
+#[derive(Debug, Clone)]
 /// ECFFT parameters for the BN254 base field `F`.
 /// Computed with the curve `E = EllipticCurve(F, [a, b])` with
 /// `a, b = 1, 5612291247948481584627780310922020304781354847659642188369727566000581075360`.
@@ -75,9 +76,10 @@ impl EcFftParameters<F> for Bn254ScalarEcFftParameters {
 
 #[cfg(test)]
 mod tests {
-    use crate::ecfft::{EcFftCosetPrecomputation, EcFftParameters, EcFftPrecomputationStep};
-
     use crate::bn254_scalar::{Bn254ScalarEcFftParameters, F};
+    use crate::ecfft::{
+        EcFftCosetPrecomputation, EcFftParameters, EcFftPrecomputation, EcFftPrecomputationStep,
+    };
     use ark_ff::{Field, One, PrimeField, Zero};
     use ark_poly::univariate::DenseOrSparsePolynomial;
     use ark_poly::DenseUVPolynomial;
@@ -86,6 +88,10 @@ mod tests {
         rand::{distributions::Standard, prelude::Distribution, Rng},
         test_rng,
     };
+    use once_cell::sync::Lazy;
+
+    static PRECOMPUTE: Lazy<EcFftPrecomputation<F, Bn254ScalarEcFftParameters>> =
+        Lazy::new(|| Bn254ScalarEcFftParameters::precompute());
 
     #[test]
     /// Tests that precomputations don't panic.
@@ -131,7 +137,7 @@ mod tests {
     #[test]
     /// Tests constructing vanishing polynomial on first moeity of coset.
     fn test_vanish() {
-        let precomputation = Bn254ScalarEcFftParameters::precompute();
+        let precomputation = PRECOMPUTE.clone();
         for coset_precomp in precomputation.coset_precomputations.iter() {
             let s = coset_precomp
                 .coset
@@ -166,7 +172,7 @@ mod tests {
     #[test]
     /// Tests constructing vanishing polynomial on first moeity of coset.
     fn test_vanish_squared_rem_xnn() {
-        let precomputation = Bn254ScalarEcFftParameters::precompute();
+        let precomputation = PRECOMPUTE.clone();
         for coset_precomp in precomputation.coset_precomputations.iter().rev() {
             let s = coset_precomp
                 .coset

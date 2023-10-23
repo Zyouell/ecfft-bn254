@@ -2,11 +2,11 @@ use std::marker::PhantomData;
 
 use ark_ff::PrimeField;
 use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial};
-use num_bigint::BigUint;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 use crate::utils::{isogeny::Isogeny, matrix::Matrix};
 
-pub trait EcFftParameters<F: PrimeField>: Sized {
+pub trait EcFftParameters<F: PrimeField>: Sized + Sync + Send {
     /// Logarithm of the size of the maximal ECFFT coset in the curve.
     const LOG_N: usize;
     /// Size of the maximal ECFFT coset in the curve.
@@ -101,33 +101,6 @@ pub trait EcFftParameters<F: PrimeField>: Sized {
                 ]));
             }
 
-            let vanish_on_s_prime = s_prime
-                .iter()
-                .map(|val| s.iter().fold(F::one(), |acc, s| acc * (*val - *s)))
-                .collect::<Vec<F>>();
-
-            let c_evals_s_prime = vanish_on_s_prime
-                .iter()
-                .enumerate()
-                .map(|(i, val)| {
-                    let field_val = val.pow([2 as u64]);
-                    let big_int: BigUint = field_val.into();
-                    let reduce_by: BigUint = (s[i].pow([nn as u64])).into();
-                    let modulo = big_int % reduce_by;
-                    F::from(modulo)
-                })
-                .collect::<Vec<F>>();
-
-            let mut c_evals = Vec::new();
-            let c_evals_s = vec![F::zero(); s.len()];
-
-            for (i, c_eval) in c_evals.iter_mut().enumerate() {
-                if i % 2 == 0 {
-                    *c_eval = c_evals_s[i / 2];
-                } else {
-                    *c_eval = c_evals_s_prime[i / 2];
-                }
-            }
             steps.push(EcFftPrecomputationStep::<F, Self> {
                 s: s.clone(),
                 s_prime: s_prime.clone(),
@@ -135,8 +108,6 @@ pub trait EcFftParameters<F: PrimeField>: Sized {
                 inverse_matrices_s,
                 matrices_s_prime,
                 inverse_matrices_s_prime,
-                vanish_on_s_prime,
-                c_evals,
                 _phantom: PhantomData,
             });
             s = s.into_iter().take(nn).map(|x| psi.eval(x)).collect();
@@ -253,6 +224,7 @@ pub trait EcFftParameters<F: PrimeField>: Sized {
     }
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct EcFftPrecomputationStep<F: PrimeField, P: EcFftParameters<F>> {
     pub s: Vec<F>,
     pub s_prime: Vec<F>,
@@ -260,11 +232,10 @@ pub struct EcFftPrecomputationStep<F: PrimeField, P: EcFftParameters<F>> {
     pub inverse_matrices_s: Vec<Matrix<F>>,
     pub matrices_s_prime: Vec<Matrix<F>>,
     pub inverse_matrices_s_prime: Vec<Matrix<F>>,
-    pub vanish_on_s_prime: Vec<F>,
-    pub c_evals: Vec<F>,
     pub _phantom: PhantomData<P>,
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct EcFftCosetPrecomputation<F: PrimeField, P: EcFftParameters<F>> {
     pub coset: Vec<F>,
     pub vanish_on_s_prime: Vec<F>,
@@ -273,6 +244,7 @@ pub struct EcFftCosetPrecomputation<F: PrimeField, P: EcFftParameters<F>> {
     pub steps: Vec<EcFftPrecomputationStep<F, P>>,
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, CanonicalSerialize, CanonicalDeserialize)]
 pub struct EcFftPrecomputation<F: PrimeField, P: EcFftParameters<F>> {
     pub coset_precomputations: Vec<EcFftCosetPrecomputation<F, P>>,
 }
@@ -579,7 +551,7 @@ impl<F: PrimeField, P: EcFftParameters<F>> EcFftCosetPrecomputation<F, P> {
 
 impl<F: PrimeField, P: EcFftParameters<F>> EcFftPrecomputation<F, P> {
     /// Evaluates polynomial of degree `<n` on the sub-coset of size `n` in O(n * log^2 n).
-    /// Expects the polynomial to have a power of two coefficients, so one may need to resize with zeros before calling this.
+    /// Expects the polynomial to have a power of two coefficients, so one may need to resize with zeroes before calling this.
     pub fn evaluate_over_domain(&self, poly: &DensePolynomial<F>) -> Vec<F> {
         let mut evaluations = poly.to_vec();
         let mut scratch1 = poly.coeffs.clone();
