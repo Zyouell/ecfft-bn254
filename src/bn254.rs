@@ -7,6 +7,7 @@ pub type F = ark_bn254::Fq;
 /// Number of 64-bit limbs needed to represent field elements.
 const NUM_LIMBS: usize = 4;
 
+#[derive(Debug)]
 /// ECFFT parameters for the BN254 base field `F`.
 /// Computed with the curve `E = EllipticCurve(F, [a, b])` with
 /// `a, b = 1, 5612291247948481584627780310922020304781354847659642188369727566000581075360`.
